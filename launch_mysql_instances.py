@@ -6,7 +6,7 @@ import subprocess
 import sys
 from botocore.exceptions import ClientError
 
-# create and lunch instances
+# create and launch instances
 def lunch_ec2(): 
     # create SSH key_pair named 'bot.pem' 
     keypair_name = create_key_pair()
@@ -19,7 +19,7 @@ def lunch_ec2():
     # The instance in zone us-east-1a is for the stand-alone and the 4 other ones are for the MySQL Cluster 
     # The instance in zone us-east-1b is for the manager of the the MySQL Cluster 
     # The instance in zones us-east-1c, us-east-1d and us-east-1e are for the workers of the the MySQL Cluster 
-    lunched = create_instances('t2.micro', keypair_name, [security_group_id], ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']) 
+    create_instances('t2.micro', keypair_name, [security_group_id], ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']) 
 
 
 # function that creates and saves an ssh key pair. It also gives read only permission to the file  
