@@ -8,26 +8,28 @@ from botocore.exceptions import ClientError
 
 # Function to install MySQL, do the right setup for the MySQL and benchmark on the stand-alone instance and the MySQL Cluster instances
 def setup_mysql():
-    # Get the stand_alone instance infos
-    stand_alone_instance_id, stand_alone_public_ip  = get_stand_alone_infos()
+    # Set up the sand-alone
+    # Get the stand-alone instance infos
+    stand_alone_public_ip  = get_stand_alone_infos()
     # Install MySQL on the stand-alone instance
-    install_mysql_stand_alone(stand_alone_instance_id, stand_alone_public_ip, 'bot.pem')
+    install_mysql_stand_alone(stand_alone_public_ip, 'bot.pem')
 
+    # Set up the cluster
     # Get the manager of the the MySQL Cluster instance infos
-    manager_instance_id, manager_public_ip = get_manager_infos()
+    manager_public_ip = get_manager_infos()
     # Get the workers of the the MySQL Cluster instances infos
     workers_infos = get_workers_infos()
     # Install MySQL Cluster and setup the instance to be the manager of the cluster
-    install_mysql_manager(manager_instance_id, manager_public_ip, 'bot.pem', workers_infos)
+    install_mysql_manager(manager_public_ip, 'bot.pem', workers_infos)
 
+    # Benchmark
     # Test the performance of MySQL on the stand-alone instance
     benchmark_stand_alone(stand_alone_public_ip, 'bot.pem')
-
     # Test the performance of MySQL on the MySQL Cluster instances
     benchmark_cluster(manager_public_ip, 'bot.pem')
 
 # Function to install MySQL stand-alone on the instance  
-def install_mysql_stand_alone(instance_id, public_ip, key_file):
+def install_mysql_stand_alone(public_ip, key_file):
     try:
         # Initialize SSH communication with the instance
         ssh_client = paramiko.SSHClient()
@@ -67,7 +69,7 @@ def install_mysql_stand_alone(instance_id, public_ip, key_file):
         ssh_client.close()
 
 # Function to install MySQL Cluster and setup the manager instance  
-def install_mysql_manager(instance_id, public_ip, key_file, public_ip_workers):
+def install_mysql_manager(public_ip, key_file, public_ip_workers):
     try:
         # Initialize SSH communication with the instance
         ssh_client = paramiko.SSHClient()
@@ -255,45 +257,41 @@ def benchmark_cluster(public_ip, key_file):
         print(f'-------------- Successfully benchmarked the MySQL stand-alone server ---------------------------\n')  
         ssh_client.close()
 
-# Function to get the MySQL stand-alone instance id and public IP address 
+# Function to get the MySQL stand-alone public IP address 
 def get_stand_alone_infos(): 
-    instance_id = ''
     public_ip = ''
     response = ec2.describe_instances()
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
              # Get only instances currently running
-             # The instance is in the zone us-east-1a, so we only need its information
-            if instance['State']['Name'] == 'running' and instance['Placement']['AvailabilityZone'] == 'us-east-1a':
-                instance_id = instance.get('InstanceId')
+             # The instance is of type 't2.micro' and in the zone us-east-1a, so we only need its information
+            if instance['State']['Name'] == 'running' and instance['InstanceType'] == 't2.micro' and instance['Placement']['AvailabilityZone'] == 'us-east-1a':
                 public_ip = instance.get('PublicIpAddress')
             
-    return (instance_id, public_ip)
+    return public_ip
 
-# Function to get the MySQL Cluster manager instance id and public IP address 
+# Function to get the MySQL Cluster manager public IP address 
 def get_manager_infos(): 
-    instance_id = ''
     public_ip = ''
     response = ec2.describe_instances()
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
              # Get only instances currently running
-             # The instance is in the zone us-east-1b, so we only need its information
-            if instance['State']['Name'] == 'running' and instance['Placement']['AvailabilityZone'] == 'us-east-1b':
-                instance_id = instance.get('InstanceId')
+             # The instance is of type 't2.micro' and in the zone us-east-1b, so we only need its information
+            if instance['State']['Name'] == 'running' and instance['InstanceType'] == 't2.micro' and instance['Placement']['AvailabilityZone'] == 'us-east-1b':
                 public_ip = instance.get('PublicIpAddress')
             
-    return (instance_id, public_ip)
+    return public_ip
 
-# Function to get workers instance id and public IP address 
+# Function to get workers public IP address 
 def get_workers_infos():    
     public_ip_list = []
     response = ec2.describe_instances()
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
              # Get only instances currently running
-             # The instances are in zones us-east-1c, us-east-1d and us-east-1e, so we only need their information
-            if instance['State']['Name'] == 'running' and instance['Placement']['AvailabilityZone'] != 'us-east-1a' and instance['Placement']['AvailabilityZone'] != 'us-east-1b':
+             # The instances are of type 't2.micro' and in zones us-east-1c, us-east-1d and us-east-1e, so we only need their information
+            if instance['State']['Name'] == 'running' and instance['InstanceType'] == 't2.micro' and instance['Placement']['AvailabilityZone'] != 'us-east-1a' and instance['Placement']['AvailabilityZone'] != 'us-east-1b':
                 public_ip = instance.get('PublicIpAddress')
                 public_ip_list.append(public_ip)
             

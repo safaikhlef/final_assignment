@@ -21,6 +21,12 @@ def lunch_ec2():
     # The instance in zones us-east-1c, us-east-1d and us-east-1e are for the workers of the the MySQL Cluster 
     create_instances('t2.micro', keypair_name, [security_group_id], ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']) 
 
+    # Lunch 3 instances of type t2.large
+    # The instance in zone us-east-1a is for the proxy server
+    # The instance in zone us-east-1b is for the gatekeeper
+    # The instance in zone us-east-1c is for the trusted host 
+    create_instances('t2.large', keypair_name, [security_group_id], ['us-east-1a', 'us-east-1b', 'us-east-1c']) 
+
 
 # function that creates and saves an ssh key pair. It also gives read only permission to the file  
 def create_key_pair():
