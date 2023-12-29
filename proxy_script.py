@@ -36,10 +36,10 @@ def direct_hit(request):
 
 def random(request):
     # Randomly choose a cluster worker and forward the read request
-    random_slave = random.choice(cluster_workers)
+    random_worker = random.choice(cluster_workers)
     try:
         # Execute the SQL query on the database
-        conn = mysql.connector.connect(**random_slave)
+        conn = mysql.connector.connect(**random_worker)
         cursor = conn.cursor()
         cursor.execute(request)
         result = cursor.fetchall()
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     worker_2_public_ip = sys.argv[3]
     worker_3_public_ip = sys.argv[4]
     implementation = sys.argv[5]
-    request = sys.argv[6]
+    query = sys.argv[6]
 
     # Changing the public ip address for the real instances ip addresses that have been passed like arguments to the script
     cluster_manager['host'] = manager_public_ip
@@ -99,11 +99,11 @@ if __name__ == "__main__":
     
     # Choose the strategy 
     if implementation == 'Direct hit':
-        response = direct_hit(request)
+        response = direct_hit(query)
     if implementation == 'Random':
-        response = random(request)
+        response = random(query)
     if implementation == 'Customized':
-        response = customized(request)
+        response = customized(query)
 
     # Return the response from the query
     print(response)

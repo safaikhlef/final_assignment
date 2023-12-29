@@ -16,21 +16,21 @@ def lunch_ec2():
 
     # Lunch 3 instances of type t2.large
     # The instance in zone us-east-1b is for the gatekeeper 
-    gatekeeper_ip = create_instances('t2.large', keypair_name, [security_group_id_gatekeeper], ['us-east-1b'])
+    gatekeeper_ip = create_instances('t2.large', keypair_name, [security_group_id_gatekeeper], ['us-east-1b'])[0]
 
     # create security group for the trusted host that allows SHH and port 5000 traffic 
     # and is limited to traffic coming from the gatekeeper 
     security_group_id_trusted_host = create_security_group_limited_ip(gatekeeper_ip)
 
     # The instance in zone us-east-1c is for the trusted host
-    trusted_host_ip = create_instances('t2.large', keypair_name, [security_group_id_trusted_host], ['us-east-1c'])
+    trusted_host_ip = create_instances('t2.large', keypair_name, [security_group_id_trusted_host], ['us-east-1c'])[0]
 
     # create security group for the proxy that allows SHH and port 5000 traffic 
     # and is limited to traffic coming from the trusted host
     security_group_id_proxy = create_security_group_limited_ip(trusted_host_ip)
 
     # The instance in zone us-east-1a is for the proxy server
-    proxy_ip = create_instances('t2.large', keypair_name, [security_group_id_proxy], ['us-east-1a']) 
+    proxy_ip = create_instances('t2.large', keypair_name, [security_group_id_proxy], ['us-east-1a'])[0] 
 
     
     # create security group for the MySQL cluster that allows SHH, port 5000, port 1186, port 3306 traffic 

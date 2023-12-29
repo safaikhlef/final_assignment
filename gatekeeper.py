@@ -26,7 +26,7 @@ def setup_gatekeeper():
     # Get the MySQL Cluster manager and workers instances infos
     cluster_public_ip = get_cluster_infos()
     # Install the dependencies and copy the app code on the proxy server instance
-    start_proxy(trusted_host_public_ip, 'bot.pem', proxy_public_ip, gatekeeper_public_ip)
+    start_proxy(proxy_public_ip, 'bot.pem', trusted_host_public_ip, cluster_public_ip)
 
 # Function to install the dependencies and copy the app code on the instance  
 def start_gatekeeper(public_ip, key_file, trusted_host_public_ip):
@@ -115,8 +115,8 @@ def start_proxy(public_ip, key_file, trusted_host_public_ip, cluster_public_ip):
             f'export CLUSTER_MANAGER_IP="{cluster_public_ip[0]}"', # Environment variable for the cluster manager ip address
             f'export CLUSTER_WORKER_1_IP="{cluster_public_ip[1]}"', # Environment variable for the cluster worker_1 ip address
             f'export CLUSTER_WORKER_2_IP="{cluster_public_ip[2]}"', # Environment variable for the cluster worker_2 ip address
-            f'export CLUSTER_WORKER_3_IP="Customized"', # Environment variable for the cluster worker_3 ip address
-            'export IMPLEMENTATION="cluster_public_ip[3]"', # Environment variable for the implementation
+            f'export CLUSTER_WORKER_3_IP="{cluster_public_ip[3]}"', # Environment variable for the cluster worker_3 ip address
+            'export IMPLEMENTATION="Customized"', # Environment variable for the implementation
             'nohup sudo python3 proxy_app.py > /dev/null 2>&1 &'
         ]
         command = '; '.join(commands)

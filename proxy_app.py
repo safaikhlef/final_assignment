@@ -31,6 +31,9 @@ def forward_request():
         # Get the incoming request data
         incoming_request_data = request.json
 
+        # Get the SQL query from the request
+        query = incoming_request_data['request']
+
         # If the request is GET, then it is not modifying the database, 
         # so we forward the request to a cluster worker based on the selected implementation
         # The choice of implementation is kept in the environnement variable IMPLEMENTATION
@@ -39,12 +42,12 @@ def forward_request():
         # Double check that the request is not modifying the database
         # If it doesn't start with 'select', then it is modifying the database,
         # In that case we select the 'Direct hit' implementation to forward it directly to the cluster manager 
-        if not incoming_request_data.strip().lower().startswith('select'):
+        if not query.strip().lower().startswith('select'):
             implementation = 'Direct hit'
 
         # Use the script proxy_script.py to implement the strategy and execute the query
         result = subprocess.run(["python3", "./proxy_script.py"] + [cluster_manager_ip, cluster_worker_1_ip, cluster_worker_2_ip,\
-                                                                    cluster_worker_3_ip, implementation, incoming_request_data], capture_output=True, text=True, check=True)
+                                                                    cluster_worker_3_ip, implementation, query], capture_output=True, text=True, check=True)
         # Get the result of the query from stdout
         result = result.stdout.strip()
 
@@ -64,6 +67,9 @@ def forward_request():
        # Get the incoming request data
         incoming_request_data = request.json
 
+        # Get the SQL query from the request
+        query = incoming_request_data['request']
+
         # If the request is POST, then it is modifying the database, 
         # so we automatically forward the request to the cluster manager
         # In that case we select the 'Direct hit' implementation to forward it directly to the cluster manager
@@ -71,7 +77,7 @@ def forward_request():
 
         # Use the script proxy_script.py to implement the strategy and execute the query
         result = subprocess.run(["python3", "./proxy_script.py"] + [cluster_manager_ip, cluster_worker_1_ip, cluster_worker_2_ip,\
-                                                                    cluster_worker_3_ip, implementation, incoming_request_data], capture_output=True, text=True, check=True)
+                                                                    cluster_worker_3_ip, implementation, query], capture_output=True, text=True, check=True)
         # Get the result of the query from stdout
         result = result.stdout.strip()
 
@@ -86,4 +92,4 @@ def forward_request():
 
 if __name__ == '__main__':
     # Make sure the app is only accessible to requests coming from the trusted host
-    app.run(host=trusted_host_ip, port=5001)
+    app.run(host=trusted_host_ip, port=5000)
