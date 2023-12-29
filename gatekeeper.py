@@ -23,6 +23,8 @@ def setup_gatekeeper():
     start_trusted_host(trusted_host_public_ip, 'bot.pem', proxy_public_ip, gatekeeper_public_ip)
 
     # Set up the proxy
+    # Get the MySQL Cluster manager and workers instances infos
+    cluster_public_ip = get_cluster_infos()
     # Install the dependencies and copy the app code on the proxy server instance
     start_proxy(trusted_host_public_ip, 'bot.pem', proxy_public_ip, gatekeeper_public_ip)
 
@@ -46,7 +48,7 @@ def start_gatekeeper(public_ip, key_file, trusted_host_public_ip):
             'echo "----------------------- Installing necessary libraries ----------------------------------"',
             'sudo pip install Flask requests',
             'echo "----------------------- Launching the Flask app ----------------------------------"',
-            f'export TRUSTED_HOST_URL=http://{trusted_host_public_ip}:5000"', # Environment variable for the URL
+            f'export TRUSTED_HOST_URL="http://{trusted_host_public_ip}:5000"', # Environment variable for the URL
             'nohup sudo python3 gatekeeper_app.py > /dev/null 2>&1 &'
         ]
         command = '; '.join(commands)
@@ -77,7 +79,7 @@ def start_trusted_host(public_ip, key_file, proxy_public_ip, gatekeeper_public_i
             'echo "----------------------- Installing necessary libraries ----------------------------------"',
             'sudo pip install Flask requests',
             'echo "----------------------- Launching the Flask app ----------------------------------"',
-            f'export PROXY_URL=http://{proxy_public_ip}:5001"', # Environment variable for the URL
+            f'export PROXY_URL="http://{proxy_public_ip}:5001"', # Environment variable for the URL
             f'export GATEKEEPER_IP="{gatekeeper_public_ip}"', # Environment variable for the gatekeeper ip address
             'nohup sudo python3 trusted_host_app.py > /dev/null 2>&1 &'
         ]
@@ -90,10 +92,10 @@ def start_trusted_host(public_ip, key_file, proxy_public_ip, gatekeeper_public_i
         ssh_client.close()
 
 # Function to install the dependencies and copy the app code on the instance  
-def start_proxy(public_ip, key_file, proxy_public_ip, gatekeeper_public_ip):
+def start_proxy(public_ip, key_file, trusted_host_public_ip, cluster_public_ip):
     try:
-        # Copy the trusted host Flask app code on the instance
-        copy_command = f'scp -o StrictHostKeyChecking=no -i {key_file} -r proxy_app.py ubuntu@{public_ip}:/home/ubuntu/'
+        # Copy the trusted host Flask app code and the proxy script on the instance
+        copy_command = f'scp -o StrictHostKeyChecking=no -i {key_file} -r proxy_app.py proxy_script.py ubuntu@{public_ip}:/home/ubuntu/'
         os.system(copy_command)
 
         # Initialize SSH communication with the instance
@@ -101,15 +103,20 @@ def start_proxy(public_ip, key_file, proxy_public_ip, gatekeeper_public_ip):
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(public_ip, username='ubuntu', key_filename=key_file)
 
-        # Commands to start the Flask trusted host app 
+        # Commands to start the Flask proxy app 
         commands = [
             'echo "----------------------- Installing Python and pip ----------------------------------"',
             'sudo apt-get update -y',
             'sudo apt-get install python3-pip -y',
             'echo "----------------------- Installing necessary libraries ----------------------------------"',
-            'sudo pip install Flask requests',
+            'sudo pip install Flask requests mysql-connector-python ping3',
             'echo "----------------------- Launching the Flask app ----------------------------------"',
-            f'export TRUSTED_HOST_IP="{gatekeeper_public_ip}"', # Environment variable for the trusted ip address
+            f'export TRUSTED_HOST_IP="{trusted_host_public_ip}"', # Environment variable for the trusted host ip address
+            f'export CLUSTER_MANAGER_IP="{cluster_public_ip[0]}"', # Environment variable for the cluster manager ip address
+            f'export CLUSTER_WORKER_1_IP="{cluster_public_ip[1]}"', # Environment variable for the cluster worker_1 ip address
+            f'export CLUSTER_WORKER_2_IP="{cluster_public_ip[2]}"', # Environment variable for the cluster worker_2 ip address
+            f'export CLUSTER_WORKER_3_IP="Customized"', # Environment variable for the cluster worker_3 ip address
+            'export IMPLEMENTATION="cluster_public_ip[3]"', # Environment variable for the implementation
             'nohup sudo python3 proxy_app.py > /dev/null 2>&1 &'
         ]
         command = '; '.join(commands)
@@ -117,7 +124,7 @@ def start_proxy(public_ip, key_file, proxy_public_ip, gatekeeper_public_ip):
 
     finally:  
         print(stdout.read().decode('utf-8'))
-        print(f'-------------- Successfully launched the trusted host app on the instance ---------------------------\n')  
+        print(f'-------------- Successfully launched the proxy app on the instance ---------------------------\n')  
         ssh_client.close()
 
 # Function to get the gatekeeper public IP address 
@@ -158,6 +165,20 @@ def get_proxy_infos():
                 public_ip = instance.get('PublicIpAddress')
             
     return public_ip
+
+# Function to get the manager and the workers public IP address of the MySQL Cluster
+def get_cluster_infos():    
+    public_ip_list = []
+    response = ec2.describe_instances()
+    for reservation in response['Reservations']:
+        for instance in reservation['Instances']:
+             # Get only instances currently running
+             # The instances are of type 't2.micro' and in zones us-east-1b, us-east-1c, us-east-1d and us-east-1e, so we only need their information
+            if instance['State']['Name'] == 'running' and instance['InstanceType'] == 't2.micro' and instance['Placement']['AvailabilityZone'] != 'us-east-1a':
+                public_ip = instance.get('PublicIpAddress')
+                public_ip_list.append(public_ip)
+            
+    return public_ip_list
 
 if __name__ == '__main__':
     global ec2
