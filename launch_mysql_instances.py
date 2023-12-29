@@ -11,21 +11,37 @@ def lunch_ec2():
     # create SSH key_pair named 'bot.pem' 
     keypair_name = create_key_pair()
 
-    # create security group named 'botSecurityGroup' that allows SHH and http traffic 
-    security_group_id = create_security_group()
+    # create security group that allows SHH and http traffic for the gatekeeper
+    security_group_id_gatekeeper = create_security_group_gatekeeper()
+
+    # Lunch 3 instances of type t2.large
+    # The instance in zone us-east-1b is for the gatekeeper 
+    gatekeeper_ip = create_instances('t2.large', keypair_name, [security_group_id_gatekeeper], ['us-east-1b'])
+
+    # create security group for the trusted host that allows SHH and port 5000 traffic 
+    # and is limited to traffic coming from the gatekeeper 
+    security_group_id_trusted_host = create_security_group_limited_ip(gatekeeper_ip)
+
+    # The instance in zone us-east-1c is for the trusted host
+    trusted_host_ip = create_instances('t2.large', keypair_name, [security_group_id_trusted_host], ['us-east-1c'])
+
+    # create security group for the proxy that allows SHH and port 5000 traffic 
+    # and is limited to traffic coming from the trusted host
+    security_group_id_proxy = create_security_group_limited_ip(trusted_host_ip)
+
+    # The instance in zone us-east-1a is for the proxy server
+    proxy_ip = create_instances('t2.large', keypair_name, [security_group_id_proxy], ['us-east-1a']) 
 
     
+    # create security group for the MySQL cluster that allows SHH, port 5000, port 1186, port 3306 traffic 
+    # and is limited to traffic coming from the proxy
+    security_group_id_cluster = create_security_group_cluster(proxy_ip)
+
     # Lunch 5 instances of type t2.micro 
     # The instance in zone us-east-1a is for the stand-alone and the 4 other ones are for the MySQL Cluster 
     # The instance in zone us-east-1b is for the manager of the the MySQL Cluster 
     # The instance in zones us-east-1c, us-east-1d and us-east-1e are for the workers of the the MySQL Cluster 
-    create_instances('t2.micro', keypair_name, [security_group_id], ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']) 
-
-    # Lunch 3 instances of type t2.large
-    # The instance in zone us-east-1a is for the proxy server
-    # The instance in zone us-east-1b is for the gatekeeper
-    # The instance in zone us-east-1c is for the trusted host 
-    create_instances('t2.large', keypair_name, [security_group_id], ['us-east-1a', 'us-east-1b', 'us-east-1c']) 
+    create_instances('t2.micro', keypair_name, [security_group_id_cluster], ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']) 
 
 
 # function that creates and saves an ssh key pair. It also gives read only permission to the file  
@@ -69,14 +85,14 @@ def set_file_permissions(file_path):
             print(f"Failed to set permissions on Unix-like system: {e}")
 
 
-# function to create a security group that allows HTTP traffic on port 80 
-def create_security_group():
+# function to create a security group for the gatekeeper that allows HTTP traffic on port 80 
+def create_security_group_gatekeeper():
 
     try:
-        # Create a security group allowing HTTP (port 80), HTTPS (port 443), for the containers (port 5000 and 5001) and shh (port 22) traffic
+        # Create a security group allowing HTTP (port 80), HTTPS (port 443), for the trusted host/proxy (port 5000) and shh (port 22) traffic
         response = ec2.create_security_group(
-            Description='This security group is for the bot',
-            GroupName='botSecurityGroup',
+            Description='This security group is for the gatekeeper',
+            GroupName='gatekeeperSecurityGroup',
         )
         security_group_id = response['GroupId']
 
@@ -96,20 +112,12 @@ def create_security_group():
             ToPort=443,
             CidrIp='0.0.0.0/0'  # Open to all traffic 
         )
-        # Authorize inbound traffic for container1 (port 5000) 
+        # Authorize inbound traffic for trusted host/proxy (port 5000) 
         ec2.authorize_security_group_ingress(
             GroupId=security_group_id,
             IpProtocol='tcp',
             FromPort=5000,
             ToPort=5000,
-            CidrIp='0.0.0.0/0'  # Open to all traffic 
-        )
-        # Authorize inbound traffic for container2 (port 5001) 
-        ec2.authorize_security_group_ingress(
-            GroupId=security_group_id,
-            IpProtocol='tcp',
-            FromPort=5001,
-            ToPort=5001,
             CidrIp='0.0.0.0/0'  # Open to all traffic 
         )
         # Authorize inbound traffic for ssh (port 22)
@@ -135,7 +143,7 @@ def create_security_group():
             Filters=[
             {
                 'Name': 'group-name',
-                'Values': ['botSecurityGroup']
+                'Values': ['gatekeeperSecurityGroup']
                     }
                 ]
             )
@@ -143,6 +151,123 @@ def create_security_group():
         else:
             print(f"Failed to create security group {e}")
 
+
+# function to create a security group for the trusted host/proxy that allows traffic on port 5000 
+def create_security_group_limited_ip(limited_ip):
+
+    try:
+        # Create a security group allowing for the trusted host/proxy (port 5000) and shh (port 22) traffic
+        response = ec2.create_security_group(
+            Description='This security group is for the trusted host and/or the proxy',
+            GroupName=f'{limited_ip}_SecurityGroup',
+        )
+        security_group_id = response['GroupId']
+
+        # Authorize inbound traffic for trusted host/proxy (port 5000) 
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpProtocol='tcp',
+            FromPort=5000,
+            ToPort=5000,
+            CidrIp=f'{limited_ip}/32'  # Open only to traffic coming from the gatekeeper or trusted host
+        )
+        # Authorize inbound traffic for ssh (port 22)
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpPermissions=[
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 22,
+                    'ToPort': 22,
+                    'IpRanges': [
+                        {
+                            'CidrIp': '0.0.0.0/0',  # Open to all traffic 
+                        },
+                    ],
+                },
+            ],
+        )
+        return security_group_id
+    except Exception as e:
+        if "InvalidGroup.Duplicate" in str(e):
+            response = ec2.describe_security_groups(
+            Filters=[
+            {
+                'Name': 'group-name',
+                'Values': [f'{limited_ip}_SecurityGroup']
+                    }
+                ]
+            )
+            return response['SecurityGroups'][0]['GroupId']
+        else:
+            print(f"Failed to create security group {e}")
+
+
+# function to create a security group for the MySQL cluster that allows traffic on port 5000, 1186, 3306 
+def create_security_group_cluster(limited_ip):
+
+    try:
+        # Create a security group allowing for the MySQL cluster (port 5000, 1186, 3306) and shh (port 22) traffic
+        response = ec2.create_security_group(
+            Description='This security group is for the MySQL cluster',
+            GroupName='cluster_SecurityGroup',
+        )
+        security_group_id = response['GroupId']
+
+        # Authorize inbound traffic for MySQL cluster (port 5000) 
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpProtocol='tcp',
+            FromPort=5000,
+            ToPort=5000,
+            CidrIp=f'{limited_ip}/32'  # Open only to traffic coming from the proxy
+        )
+        # Authorize inbound traffic for MySQL cluster (port 1186) 
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpProtocol='tcp',
+            FromPort=1186,
+            ToPort=1186,
+            CidrIp=f'{limited_ip}/32'  # Open only to traffic coming from the proxy
+        )
+        # Authorize inbound traffic for MySQL cluster (port 3306) 
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpProtocol='tcp',
+            FromPort=3306,
+            ToPort=3306,
+            CidrIp=f'{limited_ip}/32'  # Open only to traffic coming from the proxy
+        )
+        # Authorize inbound traffic for ssh (port 22)
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpPermissions=[
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 22,
+                    'ToPort': 22,
+                    'IpRanges': [
+                        {
+                            'CidrIp': '0.0.0.0/0',  # Open to all traffic 
+                        },
+                    ],
+                },
+            ],
+        )
+        return security_group_id
+    except Exception as e:
+        if "InvalidGroup.Duplicate" in str(e):
+            response = ec2.describe_security_groups(
+            Filters=[
+            {
+                'Name': 'group-name',
+                'Values': ['cluster_SecurityGroup']
+                    }
+                ]
+            )
+            return response['SecurityGroups'][0]['GroupId']
+        else:
+            print(f"Failed to create security group {e}")
 
 # function to lunch instances with a specific type in multiple availability zones
 # (Parameter) (string) instance_type : the type of the instance . Example : 'm4.large'
@@ -154,7 +279,7 @@ def create_security_group():
 def create_instances(instance_type, keypair_name, security_group_id, availability_zones):
     # Machine Image Id. We use : Ubuntu, 22.04 LTS. Id found in aws console  
     image_id = "ami-053b0d53c279acc90"
-    response = {}
+    instances_ip = []
     try:
         # Launch instances in each availability zone
         for az in availability_zones :
@@ -181,8 +306,10 @@ def create_instances(instance_type, keypair_name, security_group_id, availabilit
             # wait to create the instance
             ec2.get_waiter('instance_running').wait(InstanceIds=[instance_id])
             print(f'Launched instance {instance_id} in availability zone {az}')
+            instances_ip.append(response['Instances'][0]['PublicIpAddress'])
         
-        print(f'all {instance_type} instances are created successfully')       
+        print(f'all {instance_type} instances have been created successfully')  
+        return instances_ip     
     except ClientError as e:
         print(f"Failed to create instances:  {e.response['Error']['Message']}")
                 

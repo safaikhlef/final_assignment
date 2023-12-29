@@ -36,15 +36,6 @@ def install_mysql_stand_alone(public_ip, key_file):
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(public_ip, username='ubuntu', key_filename=key_file)
 
-        # # Predefine MySQL root password to avoid interactive prompt
-        # mysql_root_password = "password_stand_alone"
-        # predefine_commands = [
-        #     f'echo "mysql-server mysql-server/root_password password {mysql_root_password}" | sudo debconf-set-selections',
-        #     f'echo "mysql-server mysql-server/root_password_again password {mysql_root_password}" | sudo debconf-set-selections'
-        # ]
-        # predefine_command = '; '.join(predefine_commands)
-        # ssh_client.exec_command(predefine_command)
-
         # Commands to install MySQL Server in the instance
         commands = [
             'echo "----------------------- Installing MySQL ----------------------------------"',

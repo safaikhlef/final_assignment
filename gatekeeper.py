@@ -79,7 +79,7 @@ def start_trusted_host(public_ip, key_file, proxy_public_ip, gatekeeper_public_i
             'echo "----------------------- Installing necessary libraries ----------------------------------"',
             'sudo pip install Flask requests',
             'echo "----------------------- Launching the Flask app ----------------------------------"',
-            f'export PROXY_URL="http://{proxy_public_ip}:5001"', # Environment variable for the URL
+            f'export PROXY_URL="http://{proxy_public_ip}:5000"', # Environment variable for the URL
             f'export GATEKEEPER_IP="{gatekeeper_public_ip}"', # Environment variable for the gatekeeper ip address
             'nohup sudo python3 trusted_host_app.py > /dev/null 2>&1 &'
         ]
