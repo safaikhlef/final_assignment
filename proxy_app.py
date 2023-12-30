@@ -18,13 +18,6 @@ cluster_worker_3_ip = os.environ.get('CLUSTER_WORKER_3_IP')
 # Get the implementation strategy chosen from the environment variable
 implementation = os.environ.get('IMPLEMENTATION')
 
-def is_allowed_operation(user_input):
-    # Only allow SELECT, INSERT and UPDATE operations
-    allowed_operations = ['SELECT', 'INSERT', 'UPDATE']
-    # Check if the query start with one of those key word
-    operation = user_input.strip().split()[0].upper()
-    return operation in allowed_operations
-
 @app.route('/process_request', methods=['GET'])
 def forward_request():
     try:
